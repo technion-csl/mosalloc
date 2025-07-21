@@ -1,0 +1,4 @@
+pool_type,pool_size,ragions_list_2mb,offset_2mb,ragions_list_1gb,offset_1gb
+brk,4GB,[0-1024],0,[],0
+mmap,200MB,[],0,[],0
+file,100MB,[],0,[],0

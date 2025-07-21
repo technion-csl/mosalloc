@@ -5,8 +5,8 @@
 printUsageAndExit() {
     echo "Error: please specify the following arguments:"
     echo "  -nX, --node=X     reserve huge pages on memory node X"
-    echo "  -lY, --large=Y    reserve Y large (2MB) pages"
-    echo "  -hZ, --huge=Z     reserve Z huge (1GB) pages"
+    echo "  -lY, --huge2mb=Y    reserve Y huge (2MB) pages"
+    echo "  -hZ, --huge1gb=Z     reserve Z huge (1GB) pages"
     exit -1
 }
 
@@ -17,7 +17,7 @@ if (( $? != 4 )); then
 fi
 
 short_options=n:l:h:
-long_options=node:,large:,huge:
+long_options=node:,huge2mb:,huge1gb:
 
 parsed=$(getopt --options=$short_options \
     --longoptions=$long_options \
@@ -33,10 +33,10 @@ while true; do
     case "$1" in
         -n|--node)
             node="$2"; shift 2;;
-        -l|--large)
-            large="$2"; shift 2;;
-        -h|--huge)
-            huge="$2"; shift 2;;
+        -l|--huge2mb)
+            huge2mb="$2"; shift 2;;
+        -h|--huge1gb)
+            huge1gb="$2"; shift 2;;
         --)
             shift; break;;
         *)
@@ -52,12 +52,12 @@ if [[ -z $node ]]; then
     echo "Allocating hugepages on node${node}..."
 fi
 
-if [[ -z $large || -z $huge ]]; then
+if [[ -z $huge2mb || -z $huge1gb ]]; then
     printUsageAndExit
 fi
 
-getLargePagesCount() {
-    cat $large_pages_file
+getHuge2mbPagesCount() {
+    cat $huge2mb_pages_file
 }
 
 getHugePagesCount() {
@@ -68,14 +68,14 @@ getHugePagesCount() {
     fi
 }
 
-setLargePagesCount() {
-    echo "Trying to allocate $1 large pages"
-    sudo bash -c "echo $1 > $large_pages_file"
+setHuge2mbPagesCount() {
+    echo "Trying to allocate $1 huge2mb pages"
+    sudo bash -c "echo $1 > $huge2mb_pages_file"
 }
 
 setHugePagesCount() {
     if [ -f "$huge_pages_file" ]; then
-        echo "Trying to allocate $1 huge pages"
+        echo "Trying to allocate $1 huge1gb pages"
         sudo bash -c "echo $1 > $huge_pages_file"
     else
         echo "WARNING: 1GB hugepages are not supported/enabled"
@@ -100,12 +100,12 @@ setOvercommitMemory() {
 }
 
 printHugePagesStatus() {
-    echo "  # of 2MB pages(node${node}) == $(getLargePagesCount)"
+    echo "  # of 2MB pages(node${node}) == $(getHuge2mbPagesCount)"
     echo "  # of 1GB pages(node${node}) == $(getHugePagesCount)"
 }
 
 proc_path=/sys/devices/system/node/node${node}/hugepages
-large_pages_file=${proc_path}/hugepages-2048kB/nr_hugepages
+huge2mb_pages_file=${proc_path}/hugepages-2048kB/nr_hugepages
 huge_pages_file=${proc_path}/hugepages-1048576kB/nr_hugepages
 
 echo "---------------- DEBUG INFO ----------------"
@@ -115,27 +115,27 @@ echo "Reserving hugepages..."
 echo "Currently:"
 printHugePagesStatus
 
-if (( $(getLargePagesCount) > $large )); then
-    # first, release large pages to make room for the huge pages
-    setLargePagesCount $large
-    # hopefully, we will now be able to reserve the requested huge pages
-    setHugePagesCount $huge
+if (( $(getHuge2mbPagesCount) > $huge2mb )); then
+    # first, release huge2mb pages to make room for the huge1gb pages
+    setHuge2mbPagesCount $huge2mb
+    # hopefully, we will now be able to reserve the requested huge1gb pages
+    setHugePagesCount $huge1gb
 else
-    # first, reserve huge pages, as they require more memory contiguity
-    setHugePagesCount $huge
-    # second, reserve the large pages
-    setLargePagesCount $large
+    # first, reserve huge1gb pages, as they require more memory contiguity
+    setHugePagesCount $huge1gb
+    # second, reserve the huge2mb pages
+    setHuge2mbPagesCount $huge2mb
 fi
 
 echo "Updated:"
 printHugePagesStatus
 echo "--------------------------------------------"
 
-if (( $(getHugePagesCount) >= $huge && $(getLargePagesCount) >= $large )); then
+if (( $(getHugePagesCount) >= $huge1gb && $(getHuge2mbPagesCount) >= $huge2mb )); then
     echo "Huge pages were set correctly"
     exit 0
 else
-    echo "Error: could not reserve the requested number of huge pages. Possible solutions:"
+    echo "Error: could not reserve the requested number of huge1gb pages. Possible solutions:"
     echo "1. The memory is fragmented. Please reboot the system and try again."
     echo "2. Please check that 1GB pages are supported in your system."
     exit -1
