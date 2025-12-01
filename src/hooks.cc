@@ -8,6 +8,7 @@
 #include <string.h>
 #include <fcntl.h>
 #include <assert.h>
+
 #include "hooks.h"
 #include "GlibcAllocationFunctions.h"
 #include "MemoryAllocator.h"
@@ -25,6 +26,9 @@ std::mutex g_hook_brk_mutex;
 std::mutex g_hook_mmap_mutex;
 //std::mutex g_hook_malloc_mutex;
 bool alloc_request_intercepted = false;
+
+//void *(*__morecore)(ptrdiff_t) = sbrk;
+//__morecore = sbrk;
 
 /**
  * this flag is used to prevent potential deadlock in some memory allocators 
@@ -80,18 +84,17 @@ static void setup_morecore() {
     temp_brk_top = (void*)ROUND_UP((size_t)temp_brk_top, PageSize::HUGE_1GB);
     _brk_region_base = temp_brk_top;
     
+    // disable mmap by setting M_MMAP_MAX to 0 in order to force glibc to
+    // allocate all memory chunks through morecore (to prevent using internal
+    // glibc mmap for allocating memory chunks greater than M_MMAP_THRESHOLD
+    mallopt(M_MMAP_MAX, 0);
+
     // disable heap trimming to prevent shrinking the heap below our heap base
     // address (which is an aligned---rounded up---address of the system heap
     // base to the nearest hugepage aligned address. This is done because we
     // are not allowed to violate brk semantics and to prevent heap corruption.
     mallopt(M_TRIM_THRESHOLD, -1);
     
-#ifndef DLMALLOC_VERSION
-    // disable mmap by setting M_MMAP_MAX to 0 in order to force glibc to
-    // allocate all memory chunks through morecore (to prevent using internal
-    // glibc mmap for allocating memory chunks greater than M_MMAP_THRESHOLD
-    mallopt(M_MMAP_MAX, 0);
-
     mallopt(M_TOP_PAD, 0);
 
     // Limit glibc malloc arenas to 1 arena. This is done to prevent glibc from
@@ -102,20 +105,12 @@ static void setup_morecore() {
     mallopt(M_ARENA_MAX, 1);
     
     __morecore = mosalloc_morecore;
-#else
-    // set the mmap-threshold (that makes malloc uses mmap instead of brk) to
-    // a max number to prevent using mmap for malloc calls as curent mosmodel
-    // implementation assumes that
-    mallopt(M_MMAP_THRESHOLD, int(MAX_SIZE_T));
-#endif /* DLMALLOC_VERSION */
 }
 
 static void activate_mosalloc() {
     is_library_initialized = true;
     setup_morecore();
-#ifndef DLMALLOC_VERSION
     consume_glibc_free_slots();
-#endif /* DLMALLOC_VERSION */
 }
 
 static void deactivate_mosalloc() {
@@ -136,7 +131,7 @@ static void destructor() {
     deactivate_mosalloc();
 }
 
-int mprotect(void *addr, size_t len, int prot) __THROW {
+int mprotect(void *addr, size_t len, int prot) __THROW_EXCEPTION {
     if (hpbrs_allocator.IsInitialized() == true &&
         hpbrs_allocator.IsAddressInHugePageRegions(addr) == true) {
         return 0;
@@ -146,7 +141,7 @@ int mprotect(void *addr, size_t len, int prot) __THROW {
 }
 
 void *mmap(void *addr, size_t length, int prot, int flags, int fd, 
-            off_t offset) __THROW {
+            off_t offset) __THROW_EXCEPTION {
     if (hpbrs_allocator.IsInitialized() == false) {
         GlibcAllocationFunctions local_glibc_funcs;
         return local_glibc_funcs.CallGlibcMmap(addr, length, prot, flags, fd, offset);
@@ -162,7 +157,7 @@ void *mmap(void *addr, size_t length, int prot, int flags, int fd,
     return hpbrs_allocator.AllocateFromAnonymousMmapRegion(length);
 }
 
-int munmap(void *addr, size_t length) __THROW {
+int munmap(void *addr, size_t length) __THROW_EXCEPTION {
     if (hpbrs_allocator.IsInitialized() == false) {
         GlibcAllocationFunctions local_glibc_funcs;
         return local_glibc_funcs.CallGlibcMunmap(addr, length);
@@ -174,7 +169,7 @@ int munmap(void *addr, size_t length) __THROW {
     return res;
 }
 
-int brk(void *addr) __THROW {
+int brk(void *addr) __THROW_EXCEPTION {
     if (hpbrs_allocator.IsInitialized() == false) {
         GlibcAllocationFunctions local_glibc_funcs;
         return local_glibc_funcs.CallGlibcBrk(addr);
@@ -185,13 +180,13 @@ int brk(void *addr) __THROW {
     return hpbrs_allocator.ChangeProgramBreak(addr);
 }
 
-void *mosalloc_morecore(intptr_t increment) __THROW {
+void *mosalloc_morecore(intptr_t increment) __THROW_EXCEPTION {
     alloc_request_intercepted = true;
     void* ptr = sbrk(increment);
     return ptr;
 }
 
-void *sbrk(intptr_t increment) __THROW {
+void *sbrk(intptr_t increment) __THROW_EXCEPTION {
     if (hpbrs_allocator.IsInitialized() == false) {
         GlibcAllocationFunctions local_glibc_funcs;
         return local_glibc_funcs.CallGlibcSbrk(increment);

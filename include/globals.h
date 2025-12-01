@@ -51,9 +51,7 @@
 * mmap special flags for using huge pages
 **********************************************/
 #define MMAP_PROTECTION (PROT_READ | PROT_WRITE)
-#ifndef MMAP_FLAGS
 #define MMAP_FLAGS (MAP_PRIVATE | MAP_ANONYMOUS)
-#endif /* MMAP_FLAGS */
 #define MAP_HUGE_2MB    (21 << MAP_HUGE_SHIFT)
 #define MAP_HUGE_1GB    (30 << MAP_HUGE_SHIFT)
 
