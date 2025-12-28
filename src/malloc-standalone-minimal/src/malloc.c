@@ -355,7 +355,7 @@
 
 // Use our public symbol, not glibc's private one
 
- #define MORECORE         (*__morecore)
+#define MORECORE         (*__morecore)
 #define MORECORE_FAILURE 0
 void * __glibc_morecore (ptrdiff_t);
 void *(*__morecore)(ptrdiff_t) = __glibc_morecore;

@@ -8,7 +8,7 @@ include_directories(${GTEST_INCLUDE_DIRS})
 
 set(TEST_NAME ${PROJECT_NAME}-test)
 add_executable(${TEST_NAME} ${TEST_SRCS} ${TEST_HDRS})
-target_link_libraries(${TEST_NAME} ${GTEST_LIBRARIES} pthread gtest_main ${API_LIBRARY})
+target_link_libraries(${TEST_NAME} ${GTEST_LIBRARIES} pthread gtest_main malloc_min ${API_LIBRARY})
 add_test(NAME ${TEST_NAME}-run COMMAND ${TEST_NAME})
 
 # copy the reserveHugePages.sh script to binary directory to be used in the

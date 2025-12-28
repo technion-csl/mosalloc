@@ -1,11 +1,10 @@
 # Build libmalloc_min.so
 project(malloc_min C)
 
-# Source files (only malloc.c; arena.c is included from it)
+# Source files (only malloc.c; arena.c and morecore.c are included from it)
 set(SOURCES
     src/malloc.c
     src/exports.c
-    src/morecore.c
 )
 
 # Create shared library FIRST
@@ -20,23 +19,17 @@ target_include_directories(malloc_min PRIVATE
   ${CMAKE_CURRENT_SOURCE_DIR}/include/glibc-src/elf
 )
 
-# Preprocessor definitions (avoid parentheses in add_definitions, use string form)
+# Preprocessor definitions
+# Note: Function-style macros (SHLIB_COMPAT, versioned_symbol, etc.) are already
+# defined in glibc_compat.h which is force-included below
 target_compile_definitions(malloc_min PRIVATE
     _GNU_SOURCE
-    "SHLIB_COMPAT(a,b,c)=0"
-    "versioned_symbol(a,b,c,d)="
-    "compat_symbol(a,b,c,d)="
-    "default_symbol_version(a,b,c)="
-    "strong_alias(a,b)="
-    "weak_alias(a,b)="
-    "__nonnull(x)="
-    "__nonnull(x)="
 )
 
 # Force include config headers
 target_compile_options(malloc_min PRIVATE
-    "-include" "${CMAKE_CURRENT_SOURCE_DIR}/include/config.h"
-    "-include" "${CMAKE_CURRENT_SOURCE_DIR}/include/glibc_compat.h"
+    "SHELL:-include ${CMAKE_CURRENT_SOURCE_DIR}/include/config.h"
+    "SHELL:-include ${CMAKE_CURRENT_SOURCE_DIR}/include/glibc_compat.h"
     -fPIC
     -O2
     -pthread
