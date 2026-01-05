@@ -43,3 +43,8 @@ target_link_libraries(malloc_min PRIVATE
     pthread
     dl
 )
+
+# Set output directory to src/ instead of src/malloc-standalone-minimal/
+set_target_properties(malloc_min PROPERTIES
+    LIBRARY_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/../"
+)
