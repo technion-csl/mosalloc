@@ -5,7 +5,6 @@
 #include <unistd.h>   // write
 #include "trace.h"
 
-
 /* ---------- internal allocator entry points from src/malloc.c ---------- */
 void   *__libc_malloc(size_t);
 void    __libc_free(void *);

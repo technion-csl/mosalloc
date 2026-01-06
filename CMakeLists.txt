@@ -4,12 +4,13 @@ project(mosalloc)
 set(CMAKE_CXX_STANDARD 11)
 
 # Build malloc-standalone-minimal FIRST
-add_subdirectory(src/malloc-standalone-minimal)
+
 
 # Define macros for mosalloc
 add_definitions(-DTHREAD_SAFETY)
 include(CompilerFlags.cmake)
 
+add_subdirectory(src/malloc-standalone-minimal)
 # Build mosalloc library SECOND (depends on malloc_min)
 set(API_LIBRARY "${PROJECT_NAME}-api")
 add_subdirectory(src)
