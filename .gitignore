@@ -9,6 +9,9 @@
 **/CMakeScripts
 **/compile_commands.json
 
+**/*.d
+**/*.o
+**/*.err
 /build/
 Testing
 

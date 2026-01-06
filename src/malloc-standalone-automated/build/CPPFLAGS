@@ -1,0 +1,1 @@
+-include include/config.h -include include/auto_stubs.h -include include/glibc_compat.h -Iinclude/special_shims -Iinclude -Iinclude/glibc-src -Iinclude/glibc-src/include -Iinclude/glibc-src/sysdeps -Iinclude/glibc-src/bits -Iinclude/glibc-src/malloc -Iinclude/glibc-src/stdlib -Iinclude/special_shims/elf -Iinclude/glibc-src/sysdeps/generic
