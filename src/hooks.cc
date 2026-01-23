@@ -27,8 +27,10 @@ std::mutex g_hook_mmap_mutex;
 //std::mutex g_hook_malloc_mutex;
 bool alloc_request_intercepted = false;
 
-//void *(*__morecore)(ptrdiff_t) = sbrk;
-//__morecore = sbrk;
+// Declare __morecore function pointer (defined in glibc's malloc.c)
+extern "C" {
+    extern void *(*__morecore)(ptrdiff_t);
+}
 
 /**
  * this flag is used to prevent potential deadlock in some memory allocators 

@@ -7,14 +7,21 @@ project(malloc_auto C CXX)
 set(MALLOC_AUTO_DIR ${CMAKE_CURRENT_SOURCE_DIR})
 set(MALLOC_C ${MALLOC_AUTO_DIR}/src/malloc.c)
 set(MORECORE_C ${MALLOC_AUTO_DIR}/src/morecore.c)
+set(MALLOC_HUGEPAGES_C ${MALLOC_AUTO_DIR}/src/malloc-hugepages.c)
 
 # Custom command to generate and patch malloc.c
 add_custom_command(
-    OUTPUT ${MALLOC_C} ${MORECORE_C}
-    COMMAND make mosalloc
+    OUTPUT ${MALLOC_C} ${MORECORE_C} ${MALLOC_HUGEPAGES_C}
+    COMMAND make -f generate.mk mosalloc
     WORKING_DIRECTORY ${MALLOC_AUTO_DIR}
     COMMENT "Generating malloc.c from glibc and applying mosalloc __morecore patch"
     VERBATIM
+)
+
+# Mark generated files so CMake knows they will be created at build time
+set_source_files_properties(
+    ${MALLOC_C} ${MORECORE_C} ${MALLOC_HUGEPAGES_C}
+    PROPERTIES GENERATED TRUE
 )
 
 # Custom target to trigger generation

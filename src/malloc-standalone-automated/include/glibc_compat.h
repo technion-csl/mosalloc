@@ -12,6 +12,7 @@
 #include <sys/types.h>   /* off_t, intptr_t */
 #include <sys/mman.h>    /* mmap, munmap, mprotect, madvise, MADV_* */
 #include <sys/sysinfo.h> /* get_nprocs */
+#include <malloc.h>      /* mallinfo, mallinfo2, mallopt constants */
 
 #ifdef __cplusplus
 extern "C" {
@@ -69,7 +70,7 @@ extern "C" {
 # define IS_IN(lib) IS_IN_##lib
 
 /* We want to behave as if we are being built into libc, not the loader. */
-# define IS_IN_libc      0
+# define IS_IN_libc      1
 # define IS_IN_rtld      0
 # define IS_IN_libpthread 0
 # define IS_IN_librt     0
@@ -357,30 +358,6 @@ __sbrk (intptr_t increment)
 {
     return sbrk (increment);
 }
-#endif
-
-/* ------------------------------------------------------------------ */
-/*  mallinfo2 compatibility                                           */
-/* ------------------------------------------------------------------ */
-
-/* Host libc may not define struct mallinfo2; malloc.c expects a full
-   definition with these fields (used only for stats). We provide a
-   minimal compatible struct. */
-#ifndef GLIBC_STANDALONE_MALLINFO2
-#define GLIBC_STANDALONE_MALLINFO2 1
-struct mallinfo2
-{
-  size_t arena;
-  size_t ordblks;
-  size_t smblks;
-  size_t hblks;
-  size_t hblkhd;
-  size_t usmblks;
-  size_t fsmblks;
-  size_t uordblks;
-  size_t fordblks;
-  size_t keepcost;
-};
 #endif
 
 #ifdef __cplusplus

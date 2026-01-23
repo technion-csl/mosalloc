@@ -46,7 +46,8 @@ static inline int sys_munmap(void *addr, size_t length) {
 
 static inline int sys_brk(void *addr) {
     void* result = (void*)syscall(SYS_brk, addr);
-    return (result == (void*)-1) ? -1 : 0;
+    if (result < addr) { errno = ENOMEM; return -1; }
+    return 0;
 }
 
 static inline void* sys_sbrk(intptr_t increment) {
@@ -78,20 +79,45 @@ bool is_library_initialized = false;
 std::mutex g_hook_sbrk_mutex;
 std::mutex g_hook_brk_mutex;
 std::mutex g_hook_mmap_mutex;
-bool alloc_request_intercepted = false;
+volatile  bool alloc_request_intercepted = false;
 bool is_inside_malloc_api = false;
 
-// For minimal malloc, we don't need to consume glibc free slots
-// since we're replacing glibc malloc entirely
+// Use write() instead of fprintf() to avoid malloc recursion
+static void debug_write(const char* msg) {
+    write(STDERR_FILENO, msg, strlen(msg));
+}
+
+// Verify that mosalloc_morecore is being called by our malloc
+// Keep allocating until morecore is triggered
 static void consume_glibc_free_slots() {
-    // No-op for minimal malloc - there are no glibc free slots to consume
+    size_t chunk_size = 16;
+    debug_write("[DEBUG] consume_glibc_free_slots: starting verification loop\n");
+    while(true) {
+        alloc_request_intercepted = false;
+        void* ptr = malloc(chunk_size);
+        if (!ptr) {
+            debug_write("[DEBUG] malloc returned NULL\n");
+            break;
+        }
+        if (alloc_request_intercepted == true) {
+            debug_write("[DEBUG] SUCCESS: mosalloc_morecore was called!\n");
+            free(ptr);
+            break;
+        }
+        // Don't free - we want to exhaust pre-existing memory to force morecore call
+        chunk_size *= 2;  // Double size to speed up exhaustion
+    }
 }
 
 static void setup_morecore() {
+    debug_write("[DEBUG] setup_morecore: starting\n");
+    
     // Get current brk using direct syscall
     void* temp_brk_top = sys_sbrk(0);
     temp_brk_top = (void*)ROUND_UP((size_t)temp_brk_top, PageSize::HUGE_1GB);
     _brk_region_base = temp_brk_top;
+    
+    debug_write("[DEBUG] setup_morecore: calling mallopt\n");
     
     // Configure our minimal malloc
     mallopt(M_MMAP_MAX, 0);
@@ -99,13 +125,16 @@ static void setup_morecore() {
     mallopt(M_TOP_PAD, 0);
     mallopt(M_ARENA_MAX, 1);
     
+    debug_write("[DEBUG] setup_morecore: setting __morecore = mosalloc_morecore\n");
     __morecore = mosalloc_morecore;
+    debug_write("[DEBUG] setup_morecore: done\n");
 }
 
 static void activate_mosalloc() {
-    is_library_initialized = true;
+    debug_write("[DEBUG] activate_mosalloc: starting\n");
     setup_morecore();
     consume_glibc_free_slots();
+    is_library_initialized = true;
 }
 
 static void deactivate_mosalloc() {
@@ -126,7 +155,7 @@ static void destructor() {
 }
 
 int mprotect(void *addr, size_t len, int prot) __THROW_EXCEPTION {
-    if (hpbrs_allocator.IsInitialized() == true &&
+    if (is_library_initialized == true && hpbrs_allocator.IsInitialized() == true &&
         hpbrs_allocator.IsAddressInHugePageRegions(addr) == true) {
         return 0;
     }
@@ -135,7 +164,7 @@ int mprotect(void *addr, size_t len, int prot) __THROW_EXCEPTION {
 
 void *mmap(void *addr, size_t length, int prot, int flags, int fd, 
             off_t offset) __THROW_EXCEPTION {
-    if (hpbrs_allocator.IsInitialized() == false) {
+    if (is_library_initialized == false || hpbrs_allocator.IsInitialized() == false) {
         return sys_mmap(addr, length, prot, flags, fd, offset);
     }
     
@@ -148,7 +177,7 @@ void *mmap(void *addr, size_t length, int prot, int flags, int fd,
 }
 
 int munmap(void *addr, size_t length) __THROW_EXCEPTION {
-    if (hpbrs_allocator.IsInitialized() == false) {
+    if (is_library_initialized == false || hpbrs_allocator.IsInitialized() == false) {
         return sys_munmap(addr, length);
     }
 
@@ -159,7 +188,7 @@ int munmap(void *addr, size_t length) __THROW_EXCEPTION {
 }
 
 int brk(void *addr) __THROW_EXCEPTION {
-    if (hpbrs_allocator.IsInitialized() == false) {
+    if (is_library_initialized == false || hpbrs_allocator.IsInitialized() == false) {
         return sys_brk(addr);
     }
     
@@ -169,13 +198,14 @@ int brk(void *addr) __THROW_EXCEPTION {
 }
 
 void *mosalloc_morecore(intptr_t increment) __THROW_EXCEPTION {
+    write(2, "HIT mosalloc_morecore\n", 22);
     alloc_request_intercepted = true;
     void* ptr = sbrk(increment);
     return ptr;
 }
 
 void *sbrk(intptr_t increment) __THROW_EXCEPTION {
-    if (hpbrs_allocator.IsInitialized() == false) {
+    if (is_library_initialized == false || hpbrs_allocator.IsInitialized() == false) {
         return sys_sbrk(increment);
     }
     
