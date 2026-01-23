@@ -384,7 +384,7 @@ def main():
         env = os.environ.copy()
         env["CPPFLAGS"] = cppflags
 
-        res = sh(["make", "-s", "malloc-standalone"], cwd=PROJECT_ROOT, capture=True, env=env)
+        res = sh(["make", "-f", "generate.mk", "-s", "malloc-standalone"], cwd=PROJECT_ROOT, capture=True, env=env)
 
         # If Makefile didn't redirect stderr, save it
         if ERRFILE.stat().st_size == 0 and res.stderr:
