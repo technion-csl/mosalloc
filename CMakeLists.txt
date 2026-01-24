@@ -14,10 +14,6 @@ add_definitions(-DTHREAD_SAFETY)
 include(CompilerFlags.cmake)
 
 if(NOT MALLOC_AUTO_ONLY)
-  add_subdirectory(src/malloc-standalone-minimal)
-endif()
-
-if(NOT MALLOC_AUTO_ONLY)
   # Build mosalloc library (depends on malloc_min)
   set(API_LIBRARY "${PROJECT_NAME}-api")
   add_subdirectory(src)

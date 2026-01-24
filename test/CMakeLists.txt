@@ -21,13 +21,6 @@ if(NOT MALLOC_AUTO_ONLY)
   target_link_libraries(${TEST_NAME} ${GTEST_LIBRARIES} pthread gtest_main ${API_LIBRARY})
 
   add_test(NAME ${TEST_NAME}-run COMMAND ${TEST_NAME})
-
-  # Test with libmalloc_min_api.so by linking directly (API library without hooks.cc)
-  set(TEST_NAME_MALLOC_MIN ${PROJECT_NAME}-test-malloc-min)
-  add_executable(${TEST_NAME_MALLOC_MIN} ${TEST_SRCS} ${TEST_HDRS})
-  target_include_directories(${TEST_NAME_MALLOC_MIN} PRIVATE ${MOSALLOC_PUBLIC_INCLUDE_DIR})
-  target_link_libraries(${TEST_NAME_MALLOC_MIN} ${GTEST_LIBRARIES} pthread gtest_main malloc_min_api)
-  add_test(NAME ${TEST_NAME_MALLOC_MIN}-run COMMAND ${TEST_NAME_MALLOC_MIN})
 endif()
 
 # ------------------------------------------------------

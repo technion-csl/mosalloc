@@ -82,25 +82,17 @@ std::mutex g_hook_mmap_mutex;
 volatile  bool alloc_request_intercepted = false;
 bool is_inside_malloc_api = false;
 
-// Use write() instead of fprintf() to avoid malloc recursion
-static void debug_write(const char* msg) {
-    write(STDERR_FILENO, msg, strlen(msg));
-}
-
 // Verify that mosalloc_morecore is being called by our malloc
 // Keep allocating until morecore is triggered
 static void consume_glibc_free_slots() {
     size_t chunk_size = 16;
-    debug_write("[DEBUG] consume_glibc_free_slots: starting verification loop\n");
     while(true) {
         alloc_request_intercepted = false;
         void* ptr = malloc(chunk_size);
         if (!ptr) {
-            debug_write("[DEBUG] malloc returned NULL\n");
             break;
         }
         if (alloc_request_intercepted == true) {
-            debug_write("[DEBUG] SUCCESS: mosalloc_morecore was called!\n");
             free(ptr);
             break;
         }
@@ -110,28 +102,22 @@ static void consume_glibc_free_slots() {
 }
 
 static void setup_morecore() {
-    debug_write("[DEBUG] setup_morecore: starting\n");
     
     // Get current brk using direct syscall
     void* temp_brk_top = sys_sbrk(0);
     temp_brk_top = (void*)ROUND_UP((size_t)temp_brk_top, PageSize::HUGE_1GB);
     _brk_region_base = temp_brk_top;
-    
-    debug_write("[DEBUG] setup_morecore: calling mallopt\n");
-    
+        
     // Configure our minimal malloc
     mallopt(M_MMAP_MAX, 0);
     mallopt(M_TRIM_THRESHOLD, -1);
     mallopt(M_TOP_PAD, 0);
     mallopt(M_ARENA_MAX, 1);
     
-    debug_write("[DEBUG] setup_morecore: setting __morecore = mosalloc_morecore\n");
     __morecore = mosalloc_morecore;
-    debug_write("[DEBUG] setup_morecore: done\n");
 }
 
 static void activate_mosalloc() {
-    debug_write("[DEBUG] activate_mosalloc: starting\n");
     setup_morecore();
     consume_glibc_free_slots();
     is_library_initialized = true;
@@ -198,7 +184,6 @@ int brk(void *addr) __THROW_EXCEPTION {
 }
 
 void *mosalloc_morecore(intptr_t increment) __THROW_EXCEPTION {
-    write(2, "HIT mosalloc_morecore\n", 22);
     alloc_request_intercepted = true;
     void* ptr = sbrk(increment);
     return ptr;

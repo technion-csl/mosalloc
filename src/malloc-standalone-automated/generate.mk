@@ -84,14 +84,14 @@ mosalloc: clone-glibc run_build patch-morecore
 	rm -rf $(GLIBC_SRC)
 
 # Patch malloc.c to use customizable __morecore function pointer
-patch-morecore:
+patch-morecore: run_build
 	@echo "Patching malloc.c to use __morecore function pointer..."
 	sed -i 's|#define MORECORE         (\*__glibc_morecore)|#define MORECORE         (*__morecore)\nvoid * __glibc_morecore (ptrdiff_t);\nvoid *(*__morecore)(ptrdiff_t) = __glibc_morecore;|' src/malloc.c
 
 # This is the exact target the autoinclude script builds each iteration
 malloc-standalone: $(TARGET)
 
-run_build:
+run_build: clone-glibc
 	MAX_ITERS=$(MAX_ITERS) python3 scripts/autoinclude.py --glibc-src $(GLIBC_SRC)
 
 clone-glibc:
