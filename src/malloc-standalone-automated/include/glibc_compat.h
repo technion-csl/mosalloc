@@ -360,6 +360,20 @@ __sbrk (intptr_t increment)
 }
 #endif
 
+/* ------------------------------------------------------------------ */
+/*  mallinfo2 compatibility                                           */
+/* ------------------------------------------------------------------ */
+
+/* Host libc may not define struct mallinfo2; malloc.c expects a full
+   definition with these fields (used only for stats). We provide a
+   minimal compatible struct. */
+#if !HAVE_STRUCT_MALLINFO2
+struct mallinfo2 {
+  size_t arena, ordblks, smblks, hblks, hblkhd;
+  size_t usmblks, fsmblks, uordblks, fordblks, keepcost;
+};
+#endif
+
 #ifdef __cplusplus
 }
 #endif
