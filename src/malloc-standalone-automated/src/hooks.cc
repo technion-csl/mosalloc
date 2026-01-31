@@ -1,12 +1,8 @@
-// Local copy for malloc-standalone-minimal build
-// Modified to work with standalone minimal malloc instead of glibc
-// Uses direct syscalls instead of GlibcAllocationFunctions to avoid conflicts
 
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
 #include <sys/mman.h>
-#include <sys/syscall.h>
 #include <errno.h>
 #include <dlfcn.h>
 #include <string.h>
@@ -35,39 +31,6 @@ extern "C" {
     #endif
 }
 
-// Direct syscall wrappers to avoid recursion through our overridden functions
-static inline void* sys_mmap(void *addr, size_t length, int prot, int flags, int fd, off_t offset) {
-    return (void*)syscall(SYS_mmap, addr, length, prot, flags, fd, offset);
-}
-
-static inline int sys_munmap(void *addr, size_t length) {
-    return syscall(SYS_munmap, addr, length);
-}
-
-static inline int sys_brk(void *addr) {
-    void* result = (void*)syscall(SYS_brk, addr);
-    if (result < addr) { errno = ENOMEM; return -1; }
-    return 0;
-}
-
-static inline void* sys_sbrk(intptr_t increment) {
-    void* current = (void*)syscall(SYS_brk, 0);
-    if (current == (void*)-1) return (void*)-1;
-    
-    void* new_brk = (void*)((intptr_t)current + increment);
-    void* result = (void*)syscall(SYS_brk, new_brk);
-    
-    if (result == (void*)-1 || result < new_brk) {
-        errno = ENOMEM;
-        return (void*)-1;
-    }
-    return current;
-}
-
-static inline int sys_mprotect(void *addr, size_t len, int prot) {
-    return syscall(SYS_mprotect, addr, len, prot);
-}
-
 static void constructor() __attribute__((constructor));
 static void destructor() __attribute__((destructor));
 static void setup_morecore();
@@ -88,7 +51,8 @@ static void consume_glibc_free_slots() {
     size_t chunk_size = 16;
     while(true) {
         alloc_request_intercepted = false;
-        void* ptr = malloc(chunk_size);
+        GlibcAllocationFunctions local_glibc_funcs;
+        void* ptr = local_glibc_funcs.CallGlibcMalloc(chunk_size);
         if (!ptr) {
             break;
         }
@@ -103,8 +67,8 @@ static void consume_glibc_free_slots() {
 
 static void setup_morecore() {
     
-    // Get current brk using direct syscall
-    void* temp_brk_top = sys_sbrk(0);
+    GlibcAllocationFunctions local_glibc_funcs;
+    void* temp_brk_top = local_glibc_funcs.CallGlibcSbrk(0);
     temp_brk_top = (void*)ROUND_UP((size_t)temp_brk_top, PageSize::HUGE_1GB);
     _brk_region_base = temp_brk_top;
         
@@ -145,13 +109,15 @@ int mprotect(void *addr, size_t len, int prot) __THROW_EXCEPTION {
         hpbrs_allocator.IsAddressInHugePageRegions(addr) == true) {
         return 0;
     }
-    return sys_mprotect(addr, len, prot);
+    GlibcAllocationFunctions local_glibc_funcs;
+    return local_glibc_funcs.CallGlibcMprotect(addr, len, prot);
 }
 
 void *mmap(void *addr, size_t length, int prot, int flags, int fd, 
             off_t offset) __THROW_EXCEPTION {
     if (is_library_initialized == false || hpbrs_allocator.IsInitialized() == false) {
-        return sys_mmap(addr, length, prot, flags, fd, offset);
+        GlibcAllocationFunctions local_glibc_funcs;
+        return local_glibc_funcs.CallGlibcMmap(addr, length, prot, flags, fd, offset);
     }
     
     MUTEX_GUARD(g_hook_mmap_mutex);
@@ -164,7 +130,8 @@ void *mmap(void *addr, size_t length, int prot, int flags, int fd,
 
 int munmap(void *addr, size_t length) __THROW_EXCEPTION {
     if (is_library_initialized == false || hpbrs_allocator.IsInitialized() == false) {
-        return sys_munmap(addr, length);
+        GlibcAllocationFunctions local_glibc_funcs;
+        return local_glibc_funcs.CallGlibcMunmap(addr, length);
     }
 
     MUTEX_GUARD(g_hook_mmap_mutex);
@@ -175,7 +142,8 @@ int munmap(void *addr, size_t length) __THROW_EXCEPTION {
 
 int brk(void *addr) __THROW_EXCEPTION {
     if (is_library_initialized == false || hpbrs_allocator.IsInitialized() == false) {
-        return sys_brk(addr);
+        GlibcAllocationFunctions local_glibc_funcs;
+        return local_glibc_funcs.CallGlibcBrk(addr);
     }
     
     MUTEX_GUARD(g_hook_brk_mutex);
@@ -191,7 +159,8 @@ void *mosalloc_morecore(intptr_t increment) __THROW_EXCEPTION {
 
 void *sbrk(intptr_t increment) __THROW_EXCEPTION {
     if (is_library_initialized == false || hpbrs_allocator.IsInitialized() == false) {
-        return sys_sbrk(increment);
+        GlibcAllocationFunctions local_glibc_funcs;
+        return local_glibc_funcs.CallGlibcSbrk(increment);
     }
     
     MUTEX_GUARD(g_hook_sbrk_mutex);

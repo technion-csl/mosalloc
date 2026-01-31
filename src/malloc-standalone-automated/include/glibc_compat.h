@@ -367,12 +367,33 @@ __sbrk (intptr_t increment)
 /* Host libc may not define struct mallinfo2; malloc.c expects a full
    definition with these fields (used only for stats). We provide a
    minimal compatible struct. */
+   
+
+/* If build system didn't define it, infer for glibc. */
+#ifndef HAVE_STRUCT_MALLINFO2
+#  if defined(__GLIBC__) && defined(__GLIBC_PREREQ)
+#    if __GLIBC_PREREQ(2,33)
+#      define HAVE_STRUCT_MALLINFO2 1
+#    else
+#      define HAVE_STRUCT_MALLINFO2 0
+#    endif
+#  else
+#    define HAVE_STRUCT_MALLINFO2 0
+#  endif
+#endif
+
+
+#ifndef HAVE_STRUCT_MALLINFO2
+#  error "HAVE_STRUCT_MALLINFO2 must be defined by the build system"
+#endif
+
 #if !HAVE_STRUCT_MALLINFO2
 struct mallinfo2 {
   size_t arena, ordblks, smblks, hblks, hblkhd;
   size_t usmblks, fsmblks, uordblks, fordblks, keepcost;
 };
 #endif
+
 
 #ifdef __cplusplus
 }

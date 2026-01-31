@@ -75,23 +75,6 @@ set(MALLOC_AUTO_COMPILE_OPTIONS
     -Wextra
 )
 
-include(CheckCSourceCompiles)
-
-check_c_source_compiles("
-  #include <malloc.h>
-  int main() {
-    struct mallinfo2 mi;
-    (void)mi.arena;   // field access forces full definition
-    return 0;
-  }
-" HAVE_STRUCT_MALLINFO2)
-
-if(HAVE_STRUCT_MALLINFO2)
-  add_compile_definitions(HAVE_STRUCT_MALLINFO2=1)
-else()
-  add_compile_definitions(HAVE_STRUCT_MALLINFO2=0)
-endif()
-
 # Create shared library with both automated malloc and mosalloc implementation (includes hooks.cc)
 add_library(malloc_auto SHARED ${AUTO_SOURCES} ${MOSALLOC_SOURCES})
 add_dependencies(malloc_auto generate_malloc_auto)
