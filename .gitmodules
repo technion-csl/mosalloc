@@ -1,0 +1,3 @@
+[submodule "src/malloc-standalone-automated"]
+	path = src/malloc-standalone-automated
+	url = git@github.com:hosam-morad/malloc-standalone-auto.git
