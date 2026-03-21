@@ -129,16 +129,10 @@ def acquire_hugepages(
     owner: str,
     debug: bool = False,
 ) -> bool:
-    """
-    Reserve hugepages for this run using acquire semantics.
-    Returns True if acquire was attempted and succeeded, False if skipped.
-    """
     if debug:
         return False
 
     reserve_huge_pages_script = get_reserve_huge_pages_script()
-
-    # No need to call acquire when both are zero.
     if hugepages_2mb_count <= 0 and hugepages_1gb_count <= 0:
         return False
 
@@ -150,6 +144,10 @@ def acquire_hugepages(
         f"--huge1gb={hugepages_1gb_count}",
     ]
 
+    node = os.environ.get("MOSALLOC_HUGEPAGES_NODE")
+    if node is not None and node != "":
+        cmd.append(f"--node={node}")
+
     print(f"Mosalloc: acquiring hugepages with owner={owner}")
     print(f"Mosalloc: command={' '.join(cmd)}")
     subprocess.check_call(cmd)
@@ -157,10 +155,6 @@ def acquire_hugepages(
 
 
 def release_hugepages(owner: str, debug: bool = False) -> None:
-    """
-    Release hugepages for this run using release semantics.
-    Best effort in finally: do not hide the original benchmark failure.
-    """
     if debug:
         return
 
@@ -170,6 +164,10 @@ def release_hugepages(owner: str, debug: bool = False) -> None:
         "release",
         f"--owner={owner}",
     ]
+
+    node = os.environ.get("MOSALLOC_HUGEPAGES_NODE")
+    if node is not None and node != "":
+        cmd.append(f"--node={node}")
 
     print(f"Mosalloc: releasing hugepages with owner={owner}")
     print(f"Mosalloc: command={' '.join(cmd)}")
