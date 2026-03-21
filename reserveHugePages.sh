@@ -171,10 +171,15 @@ huge2mb=""
 huge1gb=""
 owner=""
 
-getopt --test > /dev/null
-if (( $? != 4 )); then
-    echo "Error: this system has an old version of getopt." >&2
+if getopt --test > /dev/null 2>&1; then
+    echo "Error: unexpected getopt --test success" >&2
     exit 1
+else
+    rc=$?
+    if [ "$rc" -ne 4 ]; then
+        echo "Error: this system has an old version of getopt." >&2
+        exit 1
+    fi
 fi
 
 short_options=n:l:h:o:
