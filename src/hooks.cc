@@ -112,7 +112,10 @@ static void setup_morecore() {
 static void activate_mosalloc() {
     is_library_initialized = true;
     setup_morecore();
+
+#ifndef MOSALLOC_AUTOMATED_BACKEND
     consume_glibc_free_slots();
+#endif
 }
 
 static void deactivate_mosalloc() {
