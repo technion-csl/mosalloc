@@ -4,6 +4,7 @@ import warnings
 import os
 import argparse
 import subprocess
+import signal
 import time
 import socket
 from pathlib import Path
@@ -12,6 +13,42 @@ import pandas as pd
 
 from memory_layout_config import *
 from legacy_memory_region import MemoryRegion
+
+
+class TerminatedBySignal(BaseException):
+    def __init__(self, signum):
+        self.signum = int(signum)
+        super().__init__(f"terminated by signal {self.signum}")
+
+
+def _raise_on_signal(signum, frame):
+    raise TerminatedBySignal(signum)
+
+
+def _terminate_child_process(process, timeout_sec=2.0):
+    if process is None or process.poll() is not None:
+        return
+
+    try:
+        process.terminate()
+    except ProcessLookupError:
+        return
+
+    try:
+        process.wait(timeout=timeout_sec)
+        return
+    except subprocess.TimeoutExpired:
+        pass
+
+    try:
+        process.kill()
+    except ProcessLookupError:
+        return
+
+    try:
+        process.wait(timeout=timeout_sec)
+    except subprocess.TimeoutExpired:
+        pass
 
 
 def parse_arguments():
@@ -191,10 +228,19 @@ def run_with_optional_hugepages(
     - acquire hugepages
     - launch benchmark
     - release hugepages in finally
+
+    Interval-mode controllers terminate the whole side session at I_END.
+    Catch SIGTERM/SIGINT so Python gets a chance to execute the finally
+    block and release the owner-tracked hugepage reservation.
     """
     owner = build_hugepage_owner(config_file, dispatch_program)
     acquired = False
     p = None
+
+    old_sigterm = signal.getsignal(signal.SIGTERM)
+    old_sigint = signal.getsignal(signal.SIGINT)
+    signal.signal(signal.SIGTERM, _raise_on_signal)
+    signal.signal(signal.SIGINT, _raise_on_signal)
 
     try:
         acquired = acquire_hugepages(
@@ -210,9 +256,26 @@ def run_with_optional_hugepages(
         p.wait()
         return p.returncode
 
+    except TerminatedBySignal as e:
+        print(
+            f"Mosalloc: received signal {e.signum}; releasing hugepages before exit",
+            file=sys.stderr,
+        )
+        _terminate_child_process(p)
+        return 128 + e.signum
+
     finally:
-        if acquired:
-            release_hugepages(owner=owner, debug=debug)
+        # During cleanup, do not allow a second SIGTERM/SIGINT to interrupt
+        # reserveHugePages.sh release. SIGKILL can still interrupt us, so the
+        # controller must provide a long enough SIGTERM grace period.
+        signal.signal(signal.SIGTERM, signal.SIG_IGN)
+        signal.signal(signal.SIGINT, signal.SIG_IGN)
+        try:
+            if acquired:
+                release_hugepages(owner=owner, debug=debug)
+        finally:
+            signal.signal(signal.SIGTERM, old_sigterm)
+            signal.signal(signal.SIGINT, old_sigint)
 
 
 def run_benchmark(

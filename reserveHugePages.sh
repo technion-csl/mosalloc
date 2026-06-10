@@ -106,6 +106,26 @@ owner_1gb=$2
 EOF
 }
 
+
+recompute_totals_from_owner_files() {
+    local f
+
+    total_2mb=0
+    total_1gb=0
+
+    shopt -s nullglob
+    for f in "$owners_dir"/*.env; do
+        owner_2mb=0
+        owner_1gb=0
+        # shellcheck disable=SC1090
+        source "$f"
+
+        total_2mb=$(( total_2mb + owner_2mb ))
+        total_1gb=$(( total_1gb + owner_1gb ))
+    done
+    shopt -u nullglob
+}
+
 apply_target_counts() {
     local target_2mb="$1"
     local target_1gb="$2"
@@ -237,7 +257,8 @@ case "$mode" in
     status)
         echo "Actual kernel hugepage status:"
         print_actual_status
-        load_totals
+        recompute_totals_from_owner_files
+        write_totals "$total_2mb" "$total_1gb"
         echo "Tracked totals:"
         echo "  total_2mb=$total_2mb"
         echo "  total_1gb=$total_1gb"
@@ -256,7 +277,7 @@ case "$mode" in
         [[ -n "$huge2mb" && -n "$huge1gb" ]] || print_usage_and_exit
         owner_file="${owners_dir}/${owner}.env"
 
-        load_totals
+        recompute_totals_from_owner_files
         load_owner_reservation
 
         if [[ -f "$owner_file" ]]; then
@@ -286,10 +307,11 @@ case "$mode" in
         require_owner
         owner_file="${owners_dir}/${owner}.env"
 
-        load_totals
+        recompute_totals_from_owner_files
         if [[ ! -f "$owner_file" ]]; then
-            echo "ERROR: owner '$owner' has no reservation to release" >&2
-            exit 1
+            echo "WARNING: owner '$owner' has no reservation to release; treating release as idempotent" >&2
+            write_totals "$total_2mb" "$total_1gb"
+            exit 0
         fi
         load_owner_reservation
 
@@ -303,9 +325,15 @@ case "$mode" in
         echo "Tracked totals before: 2MB=$total_2mb 1GB=$total_1gb"
         echo "Tracked totals after : 2MB=$new_total_2mb 1GB=$new_total_1gb"
 
-        apply_target_counts "$new_total_2mb" "$new_total_1gb"
-        write_totals "$new_total_2mb" "$new_total_1gb"
+        # Remove the owner before shrinking the kernel hugepage pool.
+        # This prevents an interrupted release from leaving stale owner state.
         rm -f "$owner_file"
-        exit 0
+        if apply_target_counts "$new_total_2mb" "$new_total_1gb"; then
+            write_totals "$new_total_2mb" "$new_total_1gb"
+            exit 0
+        else
+            write_totals "$new_total_2mb" "$new_total_1gb"
+            exit 1
+        fi
         ;;
 esac
