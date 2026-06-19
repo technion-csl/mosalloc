@@ -127,8 +127,10 @@ recompute_totals_from_owner_files() {
 }
 
 apply_target_counts() {
-    local target_2mb="$1"
-    local target_1gb="$2"
+    local requested_2mb="$1"
+    local requested_1gb="$2"
+    local target_2mb="$requested_2mb"
+    local target_1gb="$requested_1gb"
     local before_2mb before_1gb after_2mb after_1gb
 
     before_2mb="$(get_huge2mb_count)"
@@ -137,6 +139,25 @@ apply_target_counts() {
     echo "Reserving hugepages..."
     echo "Currently:"
     print_actual_status
+
+    # Optional high-watermark mode: keep the physical hugepage pool alive
+    # across repeats/targets instead of shrinking nr_hugepages after each
+    # logical owner release. This avoids re-forming contiguous 2MB pages and
+    # reduces failures caused by memory fragmentation.
+    #
+    # The tracked owner totals still go down on release; only the kernel pool
+    # size is kept at least as large as it already is. The reset command is
+    # intentionally excluded so final cleanup can still shrink the pool to 0.
+    if [[ "${MOSALLOC_KEEP_HUGEPAGE_POOL:-0}" == "1" && "${mode:-}" != "reset" ]]; then
+        if (( target_2mb < before_2mb )); then
+            echo "MOSALLOC_KEEP_HUGEPAGE_POOL=1: keeping 2MB hugepage pool at $before_2mb instead of shrinking to $target_2mb"
+            target_2mb="$before_2mb"
+        fi
+        if (( target_1gb < before_1gb )); then
+            echo "MOSALLOC_KEEP_HUGEPAGE_POOL=1: keeping 1GB hugepage pool at $before_1gb instead of shrinking to $target_1gb"
+            target_1gb="$before_1gb"
+        fi
+    fi
 
     # Keep the original ordering logic:
     # if 2MB needs to go down, shrink it first to free room/contiguity;
@@ -156,12 +177,12 @@ apply_target_counts() {
     print_actual_status
     echo "--------------------------------------------"
 
-    if (( after_2mb >= target_2mb && after_1gb >= target_1gb )); then
+    if (( after_2mb >= requested_2mb && after_1gb >= requested_1gb )); then
         echo "Huge pages were set correctly"
         return 0
     fi
 
-    echo "ERROR: could not reserve requested totals (target_2mb=$target_2mb, target_1gb=$target_1gb)" >&2
+    echo "ERROR: could not reserve requested totals (target_2mb=$requested_2mb, target_1gb=$requested_1gb)" >&2
     echo "Attempting rollback to previous totals: 2MB=$before_2mb 1GB=$before_1gb" >&2
 
     if (( after_2mb > before_2mb )); then
